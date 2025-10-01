@@ -1,0 +1,16 @@
+{
+  "configurationSource": "API",
+  "imageConfiguration": {
+    "port": "8000",
+    "runtime": "PYTHON_3_9"
+  },
+  "networkConfiguration": {
+    "ingressConfiguration": {
+      "isPubliclyAccessible": true
+    }
+  },
+  "instanceConfiguration": {
+    "cpu": "1024",
+    "memory": "2048"
+  }
+}
