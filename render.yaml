@@ -3,14 +3,8 @@ services:
     name: email-management-api
     runtime: python3
     buildCommand: "pip install -r requirements.txt"
-    startCommand: "gunicorn main:app -w 4 -k uvicorn.workers.UvicornWorker -b 0.0.0.0:10000"
+    startCommand: "python main.py"
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.9.0
-      - key: PORT
-        value: 10000
-      - key: ENVIRONMENT
-        value: production
 
   - type: pserv
     name: email-management-db
@@ -20,4 +14,5 @@ services:
     databasePassword: npg_rCb8uLfJHIU0
     databaseHost: ep-crimson-lake-ad0kbt5e-pooler.c-2.us-east-1.aws.neon.tech
     databasePort: 5432
+
     databaseUrlSecret: DATABASE_URL
