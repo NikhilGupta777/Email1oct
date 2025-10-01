@@ -13,8 +13,10 @@ requests
 aiohttp
 pydantic[email]
 starlette
+itsdangerous==2.1.2
 alembic
 slowapi
 python-multipart
 httpx
+
 
