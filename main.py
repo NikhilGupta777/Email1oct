@@ -213,9 +213,15 @@ def get_db():
 
 # Password utils
 def verify_password(plain_password, hashed_password):
+    # Truncate password if too long for bcrypt (72 bytes max)
+    if len(plain_password.encode('utf-8')) > 72:
+        plain_password = plain_password[:72]  # Truncate to 72 bytes
     return pwd_context.verify(plain_password, hashed_password)
 
 def get_password_hash(password):
+    # Truncate password if too long for bcrypt (72 bytes max)
+    if len(password.encode('utf-8')) > 72:
+        password = password[:72]  # Truncate to 72 bytes
     return pwd_context.hash(password)
 
 # User utils
