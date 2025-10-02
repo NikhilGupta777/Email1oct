@@ -232,18 +232,33 @@ def get_user_by_email(db: Session, email: str):
     return db.query(DBUser).filter(DBUser.email == email).first()
 
 def authenticate_user(db: Session, username: str, password: str):
-    if not username or not password:
+    try:
+        if not username or not password:
+            logger.warning("Authentication failed: Missing username or password")
+            return False
+
+        # Sanitize username input
+        username = username.strip()[:50]  # Limit length
+        if not username.replace('_', '').replace('-', '').isalnum():
+            logger.warning(f"Authentication failed: Invalid username format: {username}")
+            return False  # Only allow alphanumeric, underscore, hyphen
+
+        user = get_user(db, username)
+        if not user:
+            logger.warning(f"Authentication failed: User not found: {username}")
+            return False
+
+        # Verify password with length handling
+        if not verify_password(password, user.hashed_password):
+            logger.warning(f"Authentication failed: Invalid password for user: {username}")
+            return False
+
+        logger.info(f"Authentication successful for user: {username}")
+        return user
+
+    except Exception as e:
+        logger.error(f"Authentication error for user {username}: {str(e)}")
         return False
-    # Sanitize username input
-    username = username.strip()[:50]  # Limit length
-    if not username.replace('_', '').replace('-', '').isalnum():
-        return False  # Only allow alphanumeric, underscore, hyphen
-    user = get_user(db, username)
-    if not user:
-        return False
-    if not verify_password(password, user.hashed_password):
-        return False
-    return user
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
@@ -1960,64 +1975,73 @@ Format your response as JSON with 'subject' and 'body' fields.
 # Endpoints
 @app.post("/token")
 async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
-    client_ip = request.client.host
-    username = form_data.username.strip() if form_data.username else ""
-    
-    # Rate limiting check
-    now = datetime.now(timezone.utc)
-    key = f"{client_ip}:{username}"
-    
-    if key in login_attempts:
-        attempts, last_attempt = login_attempts[key]
-        if attempts >= MAX_LOGIN_ATTEMPTS and (now - last_attempt).total_seconds() < LOCKOUT_DURATION:
-            logger.warning(f"Account locked for user from {client_ip}")
-            raise HTTPException(status_code=429, detail="Too many failed attempts. Try again later.")
-        elif (now - last_attempt).total_seconds() >= LOCKOUT_DURATION:
-            del login_attempts[key]
-    
-    user = authenticate_user(db, username, form_data.password)
-    if not user:
-        # Track failed attempt
+    try:
+        client_ip = request.client.host
+        username = form_data.username.strip() if form_data.username else ""
+
+        logger.info(f"Login attempt for user: {sanitize_username_for_logging(username)} from {client_ip}")
+
+        # Rate limiting check
+        now = datetime.now(timezone.utc)
+        key = f"{client_ip}:{username}"
+
         if key in login_attempts:
-            attempts, _ = login_attempts[key]
-            login_attempts[key] = (attempts + 1, now)
-        else:
-            login_attempts[key] = (1, now)
-        
-        logger.warning(f"Failed login attempt for user: {sanitize_username_for_logging(username)} from {client_ip}")
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
+            attempts, last_attempt = login_attempts[key]
+            if attempts >= MAX_LOGIN_ATTEMPTS and (now - last_attempt).total_seconds() < LOCKOUT_DURATION:
+                logger.warning(f"Account locked for user from {client_ip}")
+                raise HTTPException(status_code=429, detail="Too many failed attempts. Try again later.")
+            elif (now - last_attempt).total_seconds() >= LOCKOUT_DURATION:
+                del login_attempts[key]
+
+        user = authenticate_user(db, username, form_data.password)
+        if not user:
+            # Track failed attempt
+            if key in login_attempts:
+                attempts, _ = login_attempts[key]
+                login_attempts[key] = (attempts + 1, now)
+            else:
+                login_attempts[key] = (1, now)
+
+            logger.warning(f"Failed login attempt for user: {sanitize_username_for_logging(username)} from {client_ip}")
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Incorrect username or password",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+        # Clear failed attempts on successful login
+        if key in login_attempts:
+            del login_attempts[key]
+
+        # Generate secure session ID using secrets module
+        session_id = secrets.token_urlsafe(32)
+        active_sessions[session_id] = {
+            "user_id": user.id,
+            "username": user.username,
+            "login_time": now,
+            "last_activity": now,
+            "ip": client_ip
+        }
+
+        access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        access_token = create_access_token(
+            data={"sub": user.username}, expires_delta=access_token_expires
         )
-    
-    # Clear failed attempts on successful login
-    if key in login_attempts:
-        del login_attempts[key]
-    
-    # Generate secure session ID using secrets module
-    session_id = secrets.token_urlsafe(32)
-    active_sessions[session_id] = {
-        "user_id": user.id,
-        "username": user.username,
-        "login_time": now,
-        "last_activity": now,
-        "ip": client_ip
-    }
-    
-    access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token(
-        data={"sub": user.username}, expires_delta=access_token_expires
-    )
-    
-    # Track valid token
-    active_tokens.add(access_token)
-    
-    # Log user activity
-    log_user_activity(user.id, user.username, "login", client_ip, f"Successful login from {client_ip}")
-    
-    logger.info(f"Successful login for user: {sanitize_username_for_logging(user.username)}")
-    return {"access_token": access_token, "token_type": "bearer"}
+
+        # Track valid token
+        active_tokens.add(access_token)
+
+        # Log user activity
+        log_user_activity(user.id, user.username, "login", client_ip, f"Successful login from {client_ip}")
+
+        logger.info(f"Successful login for user: {sanitize_username_for_logging(user.username)}")
+        return {"access_token": access_token, "token_type": "bearer"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Login endpoint error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error during login")
 
 @app.get("/auth/google")
 async def google_login(request: Request):
