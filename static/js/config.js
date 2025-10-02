@@ -7,8 +7,8 @@ const CONFIG = {
         if (metaTag && metaTag.content) {
             return metaTag.content;
         }
-        // Fallback to localhost for development
-        return window.location.protocol + '//' + window.location.hostname + ':8000';
+        // Use relative URLs since frontend and backend are on same domain in production
+        return '';
     })(),
     TOKEN_KEY: 'auth_token',
     // Google client ID should be configured server-side
