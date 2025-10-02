@@ -26,8 +26,8 @@ JWT_SECRET = os.getenv("JWT_SECRET")
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
 
 PERPLEXITY_API_KEY = os.getenv("PERPLEXITY_API_KEY")
-ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "https://localhost:8000,https://127.0.0.1:8000").split(",")
-BASE_URL = os.getenv("BASE_URL", "https://localhost:8000")
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "https://email-management-api-production.up.railway.app").split(",")
+BASE_URL = os.getenv("BASE_URL", "https://email-management-api-production.up.railway.app")
 
 # Validate critical environment variables
 if not JWT_SECRET:
