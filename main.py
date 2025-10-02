@@ -2017,7 +2017,7 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
 async def google_login(request: Request):
     if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
         raise HTTPException(status_code=500, detail="Google Oauth not configured.")
-    return await oauth.google.authorize_redirect(request, redirect_uri="http://localhost:8000/auth/google/callback")
+    return await oauth.google.authorize_redirect(request, redirect_uri=f"{BASE_URL}/auth/google/callback")
 
 @app.get("/auth/google/callback")
 async def google_callback(request: Request, db: Session = Depends(get_db)):
